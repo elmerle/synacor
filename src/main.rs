@@ -9,7 +9,7 @@ const MOD: u32 = 32768;
 const HALT: usize = 32776;
 const ERROR: usize = 32777;
 
-static DEBUG: bool = false;
+static DEBUG: bool = true;
 
 macro_rules! debug {
     () => {{
@@ -80,7 +80,8 @@ impl VM {
         }
     }
 
-    fn load_bin(&mut self, bin_file: &str) -> Result<usize, Error> {
+    fn load_bin(&mut self, bin_file: &str) -> Result<(), Error> {
+        println!("Loading program...");
         let mut file = File::open(bin_file)?;
         let mut curr = 0;
         while let Ok(num) = read_num(&mut file) {
@@ -88,7 +89,15 @@ impl VM {
             debug!("{}: {}", curr, num);
             curr += 1;
         }
-        Ok(curr)
+        println!("Loaded {} values.", curr);
+        Ok(())
+    }
+
+    fn load_input(&mut self, input_file: &str) -> Result<(), Error> {
+        let mut file = File::open(input_file)?;
+        file.read_to_end(&mut self.stdin_buf)?;
+        println!("{:?}", self.stdin_buf);
+        Ok(())
     }
 
     fn run(&mut self) {
@@ -358,14 +367,18 @@ fn main() {
         error: None,
         stdin_buf: Vec::new()
     };
-    let bin_file = &args[1];
 
-    println!("Loading program...");
-    match vm.load_bin(bin_file) {
-        Ok(size) => {
-            println!("Loaded {} values.", size);
-            vm.run();
-        },
-        Err(e) => println!("Error loading program: {:?}", e)
+    if let Err(e) = vm.load_bin(&args[1]) {
+        println!("Error loading program: {:?}", e);
+        return;
     }
+
+    if args.len() > 2 {
+        if let Err(e) = vm.load_input(&args[2]) {
+            println!("Error loading input: {:?}", e);
+            return;
+        }
+    }
+
+    vm.run();
 }
