@@ -6,10 +6,14 @@ use std::io::stdin;
 
 const IMAX: u16 = 32767;
 const MOD: u32 = 32768;
-const HALT: usize = 32776;
-const ERROR: usize = 32777;
 
-static DEBUG: bool = true;
+static DEBUG: bool = false;
+
+enum State {
+    RUNNING,
+    HALT,
+    ERROR(String)
+}
 
 macro_rules! debug {
     () => {{
@@ -31,8 +35,8 @@ macro_rules! debug {
 
 fn read_num(file: &mut File) -> Result<u16, Error> {
     let mut bytes = [0; 2];
-    file.read_exact(&mut bytes)?;
-    return Ok((bytes[0] as u16 + bytes[1] as u16 * 256) as u16);
+    file.read_exact(&mut bytes)?; 
+    return Ok(bytes[0] as u16 + bytes[1] as u16 * 256);
 }
 
 struct VM {
@@ -40,7 +44,7 @@ struct VM {
     mem: [u16; (IMAX + 1) as usize],
     curr: usize,
     stack: Vec<u16>,
-    error: Option<String>,
+    state: State,
     stdin_buf: Vec<u8>
 }
 
@@ -51,8 +55,7 @@ impl VM {
     }
 
     fn error<S: Into<String>>(&mut self, msg: S) {
-        self.error = Some(msg.into());
-        self.curr = ERROR;
+        self.state = State::ERROR(msg.into());
     }
 
     fn read_val(&self, x: u16) -> u16 {
@@ -94,6 +97,7 @@ impl VM {
     }
 
     fn load_input(&mut self, input_file: &str) -> Result<(), Error> {
+        println!("Reading input...");
         let mut file = File::open(input_file)?;
         file.read_to_end(&mut self.stdin_buf)?;
         println!("{:?}", self.stdin_buf);
@@ -104,43 +108,45 @@ impl VM {
         println!("Running...");
         self.curr = 0;
         loop {
-            match self.mem[self.curr] {
-                0 => self.halt(),
-                1 => self.set(),
-                2 => self.push(),
-                3 => self.pop(),
-                4 => self.eq(),
-                5 => self.gt(),
-                6 => self.jmp(),
-                7 => self.jt(),
-                8 => self.jf(),
-                9 => self.add(),
-                10 => self.mult(),
-                11 => self.mod_(),
-                12 => self.and(),
-                13 => self.or(),
-                14 => self.not(),
-                15 => self.rmem(),
-                16 => self.wmem(),
-                17 => self.call(),
-                18 => self.ret(),
-                19 => self.out(),
-                20 => self.in_(),
-                21 => self.noop(),
-                x => self.error(format!("{} not implemented!", x))
-            }
-            if self.curr == HALT {
-                return;
-            } else if self.curr == ERROR {
-                println!("ERROR: {}", self.error.as_ref().unwrap());
-                return;
+            match &self.state {
+                State::HALT => return,
+                State::ERROR(message) => {
+                    println!("ERROR: {}", message);
+                    return;
+                },
+                State::RUNNING =>
+                    match self.mem[self.curr] {
+                        0 => self.halt(),
+                        1 => self.set(),
+                        2 => self.push(),
+                        3 => self.pop(),
+                        4 => self.eq(),
+                        5 => self.gt(),
+                        6 => self.jmp(),
+                        7 => self.jt(),
+                        8 => self.jf(),
+                        9 => self.add(),
+                        10 => self.mult(),
+                        11 => self.mod_(),
+                        12 => self.and(),
+                        13 => self.or(),
+                        14 => self.not(),
+                        15 => self.rmem(),
+                        16 => self.wmem(),
+                        17 => self.call(),
+                        18 => self.ret(),
+                        19 => self.out(),
+                        20 => self.in_(),
+                        21 => self.noop(),
+                        x => self.error(format!("{} not implemented!", x))
+                }
             }
         }
     }
 
     fn halt(&mut self) {
         debug!("{} 0: halt", self.curr);
-        self.curr = HALT;
+        self.state = State::HALT;
     }
 
     fn set(&mut self) {
@@ -364,7 +370,7 @@ fn main() {
         mem: [0; (IMAX + 1) as usize],
         curr: 0,
         stack: Vec::new(),
-        error: None,
+        state: State::RUNNING,
         stdin_buf: Vec::new()
     };
 
