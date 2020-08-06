@@ -58,6 +58,10 @@ impl VM {
         self.state = State::ERROR(msg.into());
     }
 
+    fn halt_impl(&mut self) {
+        self.state = State::HALT;
+    }
+
     fn read_val(&self, x: u16) -> u16 {
         if x > IMAX {
             let val = self.regs[(x - IMAX - 1) as usize];
@@ -100,7 +104,8 @@ impl VM {
         println!("Reading input...");
         let mut file = File::open(input_file)?;
         file.read_to_end(&mut self.stdin_buf)?;
-        println!("{:?}", self.stdin_buf);
+        // todo only retain non-13 ascii (carriage)
+        debug!("{:?}", self.stdin_buf);
         Ok(())
     }
 
@@ -146,7 +151,7 @@ impl VM {
 
     fn halt(&mut self) {
         debug!("{} 0: halt", self.curr);
-        self.state = State::HALT;
+        self.halt_impl();
     }
 
     fn set(&mut self) {
@@ -326,7 +331,7 @@ impl VM {
             Some(val) => {
                 self.curr = val as usize;
             },
-            None => self.error("Popping off empty stack!")
+            None => self.halt_impl()
         }
     }
 
@@ -336,9 +341,11 @@ impl VM {
         if self.stdin_buf.len() == 0 {
             let mut input = String::new();
             match stdin().read_line(&mut input) {
-                Ok(_) => self.stdin_buf = input.into_bytes(),
+                Ok(_) => self.stdin_buf = input.trim_end().to_string().into_bytes(),
                 Err(error) => self.error(format!("stdin error: {}",error)),
-            }
+            };
+            // Windows adds \r\n, so strip the trailing whitespace and append a newline ourselves.
+            self.stdin_buf.push(b'\n');
         }
         let ch = self.stdin_buf.remove(0);
         self.write_val(a, ch as u16);
